@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Encargados EF (Nube)</title>
+
+    <!-- Tipografías: Anton (marcador/dorsal), Work Sans (texto), Space Mono (datos/etiquetas) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Work+Sans:wght@400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+    <!-- Cargar Librerías de Firebase en Vivo -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <style>
+        :root {
+            --court: #0b3d36;          /* verde cancha */
+            --court-dark: #062723;
+            --line: #f2c14e;           /* línea de pintura de cancha */
+            --whistle: #ff5a36;        /* silbato / acción principal */
+            --whistle-dark: #d8431f;
+            --cream: #faf6ec;          /* fondo papel de marcador */
+            --panel: #ffffff;
+            --ink: #16302b;
+            --ink-soft: #5a7168;
+            --local: #0b3d36;          /* equipo local */
+            --local-soft: #e3efe9;
+            --visit: #2f5f8a;          /* equipo visitante */
+            --visit-soft: #e4edf6;
+            --danger: #d33f3f;
+            --warning: #d97706;
+            --purple: #8b5cf6;
+            --radius: 14px;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Work Sans', system-ui, sans-serif;
+            background: var(--cream);
+            background-image:
+                repeating-linear-gradient(135deg, rgba(11,61,54,0.035) 0px, rgba(11,61,54,0.035) 2px, transparent 2px, transparent 26px);
+            margin: 0;
+            padding: 0 0 40px 0;
+            color: var(--ink);
+        }
+
+        .wrap { max-width: 900px; margin: 0 auto; padding: 14px; }
+
+        /* ===== MARCADOR / HERO ===== */
+        .scoreboard {
+            position: relative;
+            background: linear-gradient(180deg, #0b3d36 0%, #062723 100%);
+            border-radius: var(--radius);
+            padding: 26px 18px 22px;
+            text-align: center;
+            overflow: hidden;
+            box-shadow: 0 10px 25px -8px rgba(6,39,35,0.5);
+            margin-bottom: 14px;
+            border: 3px solid var(--line);
+        }
+        .scoreboard::before {
+            content: "";
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background-image: repeating-linear-gradient(90deg, rgba(242,193,78,0.08) 0px, rgba(242,193,78,0.08) 2px, transparent 2px, transparent 46px);
+            pointer-events: none;
+        }
+        .scoreboard .eyebrow {
+            position: relative;
+            font-family: 'Space Mono', monospace;
+            letter-spacing: 3px;
+            font-size: 0.7em;
+            color: var(--line);
+            text-transform: uppercase;
+        }
+        .scoreboard h1 {
+            position: relative;
+            font-family: 'Anton', sans-serif;
+            font-weight: 400;
+            letter-spacing: 1px;
+            color: #ffffff;
+            font-size: 2em;
+            text-transform: uppercase;
+            margin: 6px 0 4px;
+            text-shadow: 0 2px 0 rgba(0,0,0,0.25);
+        }
+        .scoreboard .sub {
+            position: relative;
+            color: #cfe4dd;
+            font-size: 0.85em;
+            font-family: 'Space Mono', monospace;
+        }
+
+        .sync-badge {
+            display: inline-flex; align-items: center; gap: 6px;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.72em; padding: 6px 12px;
+            background: rgba(255,255,255,0.12);
+            color: #fff;
+            border: 1px solid rgba(242,193,78,0.5);
+            border-radius: 999px;
+            margin-top: 12px;
+            font-weight: 700;
+            transition: background 0.3s, color 0.3s;
+        }
+        .sync-badge.is-synced { background: #dcfce7; color: #14532d; border-color: #86efac; }
+
+        /* ===== TARJETAS ===== */
+        .card {
+            background: var(--panel);
+            padding: 16px;
+            border-radius: var(--radius);
+            box-shadow: 0 4px 14px -6px rgba(6,39,35,0.15);
+            margin-bottom: 16px;
+            border: 1px solid #e7e2d3;
+        }
+        h2 {
+            font-family: 'Anton', sans-serif;
+            font-weight: 400;
+            letter-spacing: 0.5px;
+            color: var(--court);
+            text-align: left;
+            margin: 0 0 4px;
+            font-size: 1.2em;
+            text-transform: uppercase;
+            border-bottom: 3px solid var(--line);
+            padding-bottom: 8px;
+        }
+        .hint { font-size: 0.82em; color: var(--ink-soft); margin: -2px 0 10px; }
+
+        label { font-weight: 700; font-size: 0.82em; display: block; margin: 10px 0 4px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.5px; }
+
+        input, select, textarea {
+            padding: 10px 12px; border-radius: 10px; border: 1.5px solid #d8d2bd;
+            font-family: 'Work Sans', sans-serif; font-size: 0.95em; color: var(--ink);
+            background: #fff;
+        }
+        input:focus, select:focus, textarea:focus { outline: 2px solid var(--line); border-color: var(--court); }
+
+        button {
+            padding: 10px 14px; border-radius: 10px; border: none;
+            background: var(--court); color: white; font-weight: 700; cursor: pointer;
+            width: 100%; font-family: 'Work Sans', sans-serif; font-size: 0.85em;
+            letter-spacing: 0.3px; text-transform: uppercase;
+            box-shadow: 0 3px 0 rgba(0,0,0,0.18);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+        button:hover { transform: translateY(1px); box-shadow: 0 2px 0 rgba(0,0,0,0.18); }
+        button:active { transform: translateY(3px); box-shadow: none; }
+        button:focus-visible { outline: 3px solid var(--line); outline-offset: 2px; }
+
+        .btn-draw {
+            background: var(--whistle);
+            font-family: 'Anton', sans-serif; font-weight: 400;
+            font-size: 1.25em; padding: 18px; margin: 4px 0 4px;
+            box-shadow: 0 5px 0 var(--whistle-dark), 0 10px 22px -6px rgba(255,90,54,0.55);
+            letter-spacing: 1px;
+            animation: pulse-ring 2.4s ease-in-out infinite;
+        }
+        .btn-draw:active { box-shadow: 0 2px 0 var(--whistle-dark); }
+        @keyframes pulse-ring {
+            0%, 100% { box-shadow: 0 5px 0 var(--whistle-dark), 0 10px 22px -6px rgba(255,90,54,0.55); }
+            50% { box-shadow: 0 5px 0 var(--whistle-dark), 0 10px 26px -4px rgba(255,90,54,0.85); }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .btn-draw { animation: none; }
+        }
+
+        .btn-import { background: var(--purple); }
+        .btn-danger { background: var(--danger); font-size: 0.8em; padding: 8px 12px; box-shadow: 0 3px 0 #9c2b2b; }
+        .btn-warning { background: var(--warning); font-size: 0.8em; padding: 8px 12px; box-shadow: 0 3px 0 #a3590a; }
+
+        .actions-row { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+        .actions-row button { flex: 1; min-width: 130px; }
+
+        /* ===== RESULTADOS (dorsales) ===== */
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 14px; }
+        .role-box {
+            background: var(--local-soft);
+            border: 2px solid var(--court);
+            border-radius: 12px;
+            padding: 14px;
+            position: relative;
+            padding-left: 58px;
+        }
+        .role-box::before {
+            content: "🎽";
+            position: absolute; left: 10px; top: 12px;
+            font-size: 1.6em;
+        }
+        .role-title {
+            font-family: 'Space Mono', monospace;
+            font-weight: 700; color: var(--court);
+            font-size: 0.78em; margin-bottom: 6px; letter-spacing: 0.5px;
+            text-transform: uppercase;
+        }
+        .student-name { font-size: 1.05em; font-weight: 600; padding: 2px 0; color: var(--ink); }
+
+        /* ===== LISTA DE ALUMNADO ===== */
+        .student-row {
+            display: flex; align-items: center; gap: 8px;
+            background: #fbf9f2; border: 1px solid #e7e2d3;
+            padding: 8px 10px; border-radius: 10px; margin-bottom: 6px; flex-wrap: wrap;
+        }
+        .student-num {
+            font-family: 'Space Mono', monospace; font-weight: 700; color: #fff;
+            background: var(--court); width: 24px; height: 24px; border-radius: 6px;
+            display: flex; align-items: center; justify-content: center; font-size: 0.8em;
+        }
+        .student-row input[type="text"] { flex: 3; min-width: 160px; font-weight: 600; background: white; }
+        .student-row select { flex: 1; min-width: 100px; background: white; }
+        .times-box { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+        .times-box input { width: 56px; text-align: center; padding: 6px 4px; }
+        .times-box span { font-size: 0.6em; color: var(--ink-soft); text-transform: uppercase; letter-spacing: 0.3px; }
+
+        /* ===== HISTORIAL (marcador por equipos) ===== */
+        .history-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-top: 10px; }
+        .history-card {
+            background: #fbf9f2; border: 1px solid #e7e2d3; border-radius: 12px; padding: 12px;
+            border-top: 6px solid var(--local);
+        }
+        .history-card:nth-child(2) { border-top-color: var(--visit); }
+        .history-card h4 {
+            margin: 0 0 8px 0; color: var(--ink);
+            font-family: 'Anton', sans-serif; font-weight: 400; letter-spacing: 0.5px;
+            font-size: 1.05em; border-bottom: 2px dashed #d8d2bd; padding-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .history-list { list-style: none; padding: 0; margin: 0; font-size: 0.85em; }
+        .history-list li { padding: 7px 0; border-bottom: 1px dashed #e2ddc9; }
+        .hist-row-top { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+        .hist-roles { list-style: none; margin: 5px 0 0; padding: 0 0 0 10px; border-left: 2px solid #e2ddc9; font-family: 'Space Mono', monospace; }
+        .hist-roles li { padding: 2px 0; border-bottom: none; font-size: 0.82em; color: var(--ink-soft); }
+        .hist-empty { margin: 5px 0 0 10px; font-size: 0.8em; color: #94a3b8; font-style: italic; }
+        .badge-done { background: #dcfce7; color: #166534; padding: 2px 8px; border-radius: 999px; font-weight: 700; font-family: 'Space Mono', monospace; font-size: 0.85em; white-space: nowrap; }
+        .badge-pending { background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 999px; font-family: 'Space Mono', monospace; font-size: 0.85em; white-space: nowrap; }
+
+        /* ===== IMPORTAR PDF ===== */
+        .paste-box {
+            background: var(--visit-soft); border: 2px dashed var(--visit);
+            padding: 14px; border-radius: 12px; margin-bottom: 16px;
+        }
+        .paste-box label { color: var(--visit); margin: 0 0 6px 0; }
+        .paste-box textarea { width: 100%; background: white; font-family: 'Work Sans', sans-serif; }
+        .paste-actions { display: flex; gap: 10px; margin-top: 8px; }
+        .paste-actions button:first-child { flex: 2; }
+        .paste-actions button:last-child { flex: 1; background: #64748b; box-shadow: 0 3px 0 #47536280; }
+
+        .save-row { display: flex; gap: 10px; margin-top: 15px; }
+        .save-row button:first-child { flex: 2; background: var(--court); font-size: 1.05em; }
+        .save-row button:last-child { flex: 1; }
+    </style>
+</head>
+<body>
+  <div class="wrap">
+
+    <!-- MARCADOR / CABECERA -->
+    <div class="scoreboard">
+        <div class="eyebrow">Educación Física · Reparto mensual</div>
+        <h1>🏆 Encargados de EF</h1>
+        <div class="sub">Sorteo justo de responsabilidades para cada clase</div>
+        <div class="sync-badge" id="syncStatus">☁️ Conectando con la Nube...</div>
+    </div>
+
+    <!-- SELECCIÓN Y GESTIÓN DE CLASE -->
+    <div class="card">
+        <h2>🏷️ Clase actual</h2>
+        <select id="classSelect" onchange="changeClass()" style="width:100%; margin-top:4px;"></select>
+        <div class="actions-row">
+            <button onclick="addClass()">➕ Nueva clase</button>
+            <button onclick="renameClass()" class="btn-warning">✏️ Cambiar nombre</button>
+            <button onclick="deleteClass()" class="btn-danger">🗑️ Eliminar clase</button>
+            <button onclick="resetHistory()" style="background:var(--line); color:#3a2c05; box-shadow:0 3px 0 #b8912a;">🔄 Reiniciar curso completo</button>
+        </div>
+        <p class="hint" style="margin-top:10px;">ℹ️ El sorteo ya reparte de forma automática y justa: siempre da prioridad a quien menos veces ha sido encargado/a. No hace falta reiniciar nada cada mes — usa "Reiniciar curso completo" solo si quieres borrar todo el historial (por ejemplo, al empezar un curso nuevo).</p>
+    </div>
+
+    <!-- BOTÓN DE SORTEO -->
+    <button class="btn-draw" onclick="runDraw()">🎲 Realizar sorteo del mes</button>
+    <p class="hint" style="text-align:center; margin-bottom:16px;">Cada sorteo queda guardado como el reparto de "<span id="monthPreview"></span>" para esta clase.</p>
+
+    <!-- RESULTADOS DEL SORTEO -->
+    <div class="card">
+        <h2>📋 Asignación de encargados (sorteo actual)</h2>
+        <div class="results-grid" id="resultsContainer">
+            <p style="text-align:center; grid-column: 1/-1; color:#94a3b8;">Configura la lista y pulsa "Realizar sorteo".</p>
+        </div>
+    </div>
+
+    <!-- COPIAR Y PEGAR -->
+    <div class="card">
+        <h2>📋 Importar lista desde PDF</h2>
+        <div class="paste-box">
+            <label>1. Copia el texto del PDF y pégalo aquí:</label>
+            <textarea id="pasteInput" rows="3" placeholder="Pega aquí la lista copiada del PDF..."></textarea>
+            <div class="paste-actions">
+                <button class="btn-import" onclick="processPastedText()">⚡ Procesar e insertar alumnos</button>
+                <button class="btn-danger" onclick="clearTextArea()">🧹 Limpiar texto</button>
+            </div>
+        </div>
+
+        <!-- LISTA DE ALUMNOS -->
+        <h2>👥 Alumnado de la clase</h2>
+        <p class="hint">Edita nombres, ajusta género (👦/👧), asigna zona de aseo (⬆️/⬇️) o borra si un alumno deja la clase. "Veces" indica cuántas veces ha sido encargado/a en total (puedes corregirlo a mano si hace falta):</p>
+
+        <div id="studentsList"></div>
+
+        <button onclick="addSingleStudent()" style="background:var(--visit); margin-top:10px;">➕ Añadir alumno/a nuevo/a</button>
+
+        <div class="save-row">
+            <button onclick="saveCurrentClass(true)">💾 Guardar cambios en la nube</button>
+            <button onclick="clearCurrentClassList()" class="btn-danger">🗑️ Vaciar lista</button>
+        </div>
+    </div>
+
+    <!-- HISTORIAL Y ROLES -->
+    <div class="card">
+        <h2>📊 Historial y roles del alumnado</h2>
+        <p class="hint">Historial completo del curso: cuántas veces y con qué rol ha sido encargado/a cada alumno/a cada mes.</p>
+        <div class="history-grid" id="historyGrid"></div>
+    </div>
+
+  </div>
+
+<script>
+    // Configuración de Firebase con tus claves exactas
+    const firebaseConfig = {
+      apiKey: "AIzaSyAFA0AZc8IXy9wR1yz2jM2mWBRZDWQGu3g",
+      authDomain: "encargados-ef-aadbf.firebaseapp.com",
+      databaseURL: "https://encargados-ef-aadbf-default-rtdb.europe-west1.firebasedatabase.app",
+      projectId: "encargados-ef-aadbf",
+      storageBucket: "encargados-ef-aadbf.firebasestorage.app",
+      messagingSenderId: "916133191920",
+      appId: "1:916133191920:web:27cb49027920f82d4c6235"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+    const dbRef = database.ref('ef_app_data');
+
+    let db = {
+        currentClass: 'Clase 1',
+        classes: {
+            'Clase 1': Array.from({length: 25}, (_, i) => ({ id: i+1, name: '', gender: 'M', zone: 'arriba', timesUsed: 0, lastRole: '', rolesHistory: [] }))
+        },
+        classResults: {}
+    };
+
+    // Migra datos antiguos (used/lastRole) al nuevo esquema (timesUsed/rolesHistory) sin perder nada
+    function migrateAllStudents() {
+        if (!db.classes) return;
+        Object.keys(db.classes).forEach(c => {
+            (db.classes[c] || []).forEach(s => {
+                if (typeof s.timesUsed !== 'number') s.timesUsed = s.used ? 1 : 0;
+                if (!Array.isArray(s.rolesHistory)) {
+                    s.rolesHistory = s.lastRole ? [{ role: s.lastRole, month: 'Antes de esta actualización' }] : [];
+                }
+                if (typeof s.lastRole !== 'string') s.lastRole = '';
+            });
+        });
+        if (!db.classResults) db.classResults = {};
+    }
+
+    // Escuchar cambios en la Nube en tiempo real
+    dbRef.on('value', (snapshot) => {
+        const data = snapshot.val();
+        if (data) {
+            db = data;
+            migrateAllStudents();
+            document.getElementById('syncStatus').innerText = "☁️ Sincronizado en tiempo real con la Nube";
+            document.getElementById('syncStatus').classList.add('is-synced');
+        } else {
+            saveDB();
+        }
+        updateClassSelect();
+        renderStudentInputs();
+        renderHistory();
+        renderResults();
+    });
+
+    function saveDB() {
+        dbRef.set(db);
+    }
+
+    document.getElementById('monthPreview').innerText = currentMonthLabel();
+
+    function currentMonthLabel() {
+        const label = new Date().toLocaleDateString('es-ES', { month: 'long', year: 'numeric' });
+        return label.charAt(0).toUpperCase() + label.slice(1);
+    }
+
+    function updateClassSelect() {
+        const select = document.getElementById('classSelect');
+        select.innerHTML = '';
+        Object.keys(db.classes).forEach(c => {
+            select.innerHTML += `<option value="${c}" ${c===db.currentClass?'selected':''}>${c}</option>`;
+        });
+    }
+
+    function changeClass() {
+        saveCurrentClass(false);
+        db.currentClass = document.getElementById('classSelect').value;
+        renderStudentInputs();
+        renderHistory();
+        renderResults();
+        saveDB();
+    }
+
+    function addClass() {
+        const name = prompt("Nombre de la nueva clase (ej: 4º B):");
+        if(name && !db.classes[name]) {
+            saveCurrentClass(false);
+            db.classes[name] = Array.from({length: 25}, (_, i) => ({ id: i+1, name: '', gender: 'M', zone: 'arriba', timesUsed: 0, lastRole: '', rolesHistory: [] }));
+            db.currentClass = name;
+            renderStudentInputs();
+            renderHistory();
+            renderResults();
+            saveDB();
+        }
+    }
+
+    function renameClass() {
+        const oldName = db.currentClass;
+        const newName = prompt("Nuevo nombre para la clase:", oldName);
+        if(newName && newName !== oldName && !db.classes[newName]) {
+            db.classes[newName] = db.classes[oldName];
+            delete db.classes[oldName];
+            if (db.classResults && db.classResults[oldName]) {
+                db.classResults[newName] = db.classResults[oldName];
+                delete db.classResults[oldName];
+            }
+            db.currentClass = newName;
+            updateClassSelect();
+            renderResults();
+            saveDB();
+        }
+    }
+
+    function deleteClass() {
+        if(Object.keys(db.classes).length <= 1) {
+            alert("No puedes borrar la única clase disponible.");
+            return;
+        }
+        if(confirm(`¿Seguro que quieres eliminar la clase "${db.currentClass}"?`)) {
+            delete db.classes[db.currentClass];
+            if (db.classResults) delete db.classResults[db.currentClass];
+            db.currentClass = Object.keys(db.classes)[0];
+            renderStudentInputs();
+            renderHistory();
+            renderResults();
+            saveDB();
+        }
+    }
+
+    function renderStudentInputs() {
+        const list = document.getElementById('studentsList');
+        list.innerHTML = '';
+        const students = db.classes[db.currentClass] || [];
+
+        students.forEach((s, idx) => {
+            list.innerHTML += `
+                <div class="student-row">
+                    <span class="student-num">${idx + 1}</span>
+                    <input type="text" class="input-name" data-idx="${idx}" value="${s.name}" placeholder="Nombre del alumno/a...">
+                    <select class="select-gender" data-idx="${idx}">
+                        <option value="M" ${s.gender==='M'?'selected':''}>👦 Niño</option>
+                        <option value="F" ${s.gender==='F'?'selected':''}>👧 Niña</option>
+                    </select>
+                    <select class="select-zone" data-idx="${idx}">
+                        <option value="arriba" ${s.zone==='arriba'?'selected':''}>⬆️ Arriba</option>
+                        <option value="abajo" ${s.zone==='abajo'?'selected':''}>⬇️ Abajo</option>
+                    </select>
+                    <div class="times-box">
+                        <input type="number" class="input-times" data-idx="${idx}" value="${s.timesUsed||0}" min="0" title="Veces que ha sido encargado/a en total">
+                        <span>Veces</span>
+                    </div>
+                    <button class="btn-danger" style="padding:4px 8px; width:auto;" onclick="removeStudent(${idx})" title="Eliminar alumno">❌</button>
+                </div>`;
+        });
+    }
+
+    function addSingleStudent() {
+        saveCurrentClass(false);
+        const students = db.classes[db.currentClass];
+        students.push({ id: students.length + 1, name: '', gender: 'M', zone: 'arriba', timesUsed: 0, lastRole: '', rolesHistory: [] });
+        saveDB();
+    }
+
+    function removeStudent(idx) {
+        saveCurrentClass(false);
+        const students = db.classes[db.currentClass];
+        students.splice(idx, 1);
+        students.forEach((s, i) => s.id = i + 1);
+        saveDB();
+    }
+
+    function detectGender(fullName) {
+        let nameOnly = fullName.trim();
+        if (nameOnly.includes(',')) nameOnly = nameOnly.split(',')[1].trim();
+        let firstName = nameOnly.split(' ')[0].toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+
+        const femaleExceptions = ['carmen', 'pilar', 'isabel', 'raquel', 'mercedes', 'dolores', 'beatriz', 'rocio', 'consuelo', 'luz', 'sol', 'mar', 'belen', 'ines', 'iris', 'nur'];
+        const maleExceptions = ['luca', 'sasha', 'andrea', 'borja', 'joshua', 'bautista'];
+
+        if (femaleExceptions.includes(firstName)) return 'F';
+        if (maleExceptions.includes(firstName)) return 'M';
+        if (firstName.endsWith('a') || firstName.endsWith('ia') || firstName.endsWith('eth')) return 'F';
+        return 'M';
+    }
+
+    function processPastedText() {
+        const rawText = document.getElementById('pasteInput').value;
+        if (!rawText.trim()) return alert("Pega primero el texto copiado del PDF.");
+
+        let lines = rawText.split('\n')
+            .map(l => l.replace(/^\d+[\.\-\s]+/, '').trim())
+            .filter(l => l.length > 2 && !l.includes('Página') && !l.includes('Curso'));
+
+        if (lines.length === 0) return alert("No se detectaron nombres válidos.");
+
+        const students = db.classes[db.currentClass];
+        lines.forEach((name, idx) => {
+            if(students[idx]) {
+                students[idx].name = name;
+                students[idx].gender = detectGender(name);
+            } else {
+                students.push({ id: idx + 1, name: name, gender: detectGender(name), zone: 'arriba', timesUsed: 0, lastRole: '', rolesHistory: [] });
+            }
+        });
+
+        document.getElementById('pasteInput').value = '';
+        saveDB();
+        alert(`¡Guardado en la nube! Se han procesado ${lines.length} alumnos.`);
+    }
+
+    function clearTextArea() { document.getElementById('pasteInput').value = ''; }
+
+    function clearCurrentClassList() {
+        if(confirm("¿Seguro que quieres borrar todos los alumnos de esta lista en la nube?")) {
+            db.classes[db.currentClass] = [];
+            saveDB();
+        }
+    }
+
+    function saveCurrentClass(showAlert = true) {
+        const students = db.classes[db.currentClass];
+        if (!students) return;
+
+        document.querySelectorAll('.input-name').forEach(input => {
+            let idx = input.getAttribute('data-idx');
+            if(students[idx]) students[idx].name = input.value.trim();
+        });
+        document.querySelectorAll('.select-gender').forEach(select => {
+            let idx = select.getAttribute('data-idx');
+            if(students[idx]) students[idx].gender = select.value;
+        });
+        document.querySelectorAll('.select-zone').forEach(select => {
+            let idx = select.getAttribute('data-idx');
+            if(students[idx]) students[idx].zone = select.value;
+        });
+        document.querySelectorAll('.input-times').forEach(input => {
+            let idx = input.getAttribute('data-idx');
+            if(students[idx]) students[idx].timesUsed = parseInt(input.value, 10) || 0;
+        });
+
+        saveDB();
+        if(showAlert) alert("¡Cambios guardados en la Nube!");
+    }
+
+    function resetHistory() {
+        if(confirm(`⚠️ Esto borra TODO el historial de "${db.currentClass}" (veces que ha sido encargado/a cada alumno/a y todos los roles registrados durante el curso). Úsalo solo para empezar un curso nuevo. ¿Seguro que quieres continuar?`)) {
+            db.classes[db.currentClass].forEach(s => { s.timesUsed = 0; s.lastRole = ''; s.rolesHistory = []; });
+            if (db.classResults) delete db.classResults[db.currentClass];
+            renderResults();
+            saveDB();
+        }
+    }
+
+    function renderHistory() {
+        const container = document.getElementById('historyGrid');
+        container.innerHTML = '';
+        const students = (db.classes[db.currentClass] || []).filter(s => s.name !== '');
+
+        if(students.length === 0) {
+            container.innerHTML = '<p style="text-align:center; grid-column:1/-1; color:#94a3b8;">No hay alumnos agregados.</p>';
+            return;
+        }
+
+        function studentItem(s) {
+            const times = s.timesUsed || 0;
+            const history = (s.rolesHistory || []).slice().reverse();
+            const rolesHtml = history.length
+                ? `<ul class="hist-roles">${history.map(r => `<li>🗓️ ${r.month}: ${r.role}</li>`).join('')}</ul>`
+                : `<div class="hist-empty">Sin historial todavía</div>`;
+            return `
+                <li>
+                    <div class="hist-row-top">
+                        <span>${s.name} (${s.zone==='arriba'?'⬆️':'⬇️'})</span>
+                        ${times > 0 ? `<span class="badge-done">✅ ${times} ${times===1?'vez':'veces'}</span>` : `<span class="badge-pending">⏳ Pendiente</span>`}
+                    </div>
+                    ${rolesHtml}
+                </li>`;
+        }
+
+        let html = `<div class="history-card"><h4>👦 Niños (${students.filter(s=>s.gender==='M').length})</h4><ul class="history-list">`;
+        students.filter(s => s.gender === 'M').forEach(s => { html += studentItem(s); });
+        html += `</ul></div><div class="history-card"><h4>👧 Niñas (${students.filter(s=>s.gender==='F').length})</h4><ul class="history-list">`;
+        students.filter(s => s.gender === 'F').forEach(s => { html += studentItem(s); });
+        html += `</ul></div>`;
+        container.innerHTML = html;
+    }
+
+    function renderResults() {
+        const container = document.getElementById('resultsContainer');
+        const result = (db.classResults || {})[db.currentClass];
+
+        if (!result) {
+            container.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color:#94a3b8;">Todavía no se ha hecho ningún sorteo para esta clase.</p>';
+            return;
+        }
+
+        container.innerHTML = `
+            <p style="grid-column:1/-1; font-family:'Space Mono',monospace; color:var(--ink-soft); font-size:0.8em; margin:0 0 4px;">📅 Sorteo de: ${result.month}</p>
+            <div class="role-box"><div class="role-title">🚦 AGENTES DE TRÁFICO</div>${result.trafico.map((n,i)=>`<div class="student-name">${i+1}. ${n}</div>`).join('')}</div>
+            <div class="role-box"><div class="role-title">📦 COMISARIOS DE MATERIALES</div>${result.materiales.map((n,i)=>`<div class="student-name">${i+1}. ${n}</div>`).join('')}</div>
+            <div class="role-box"><div class="role-title">🧼 INSPECTORES ASEO (ARRIBA)</div><div class="student-name">👦 Niño: ${result.aseoArribaM}</div><div class="student-name">👧 Niña: ${result.aseoArribaF}</div></div>
+            <div class="role-box"><div class="role-title">🧼 INSPECTORES ASEO (ABAJO)</div><div class="student-name">👦 Niño: ${result.aseoAbajoM}</div><div class="student-name">👧 Niña: ${result.aseoAbajoF}</div></div>
+        `;
+    }
+
+    // Elige "count" alumnos/as de "pool" priorizando SIEMPRE a quien menos veces ha sido encargado/a,
+    // y entre empatados, prefiere a quien no haya tenido ya ese rol concreto antes.
+    function pickFairly(pool, roleName, count) {
+        let working = [...pool];
+        let picks = [];
+        for (let i = 0; i < count && working.length > 0; i++) {
+            const minTimes = Math.min(...working.map(s => s.timesUsed || 0));
+            const eligible = working.filter(s => (s.timesUsed || 0) === minTimes);
+            const preferred = eligible.filter(s => !(s.rolesHistory || []).some(r => r.role === roleName));
+            const chooseFrom = preferred.length ? preferred : eligible;
+            const chosen = chooseFrom[Math.floor(Math.random() * chooseFrom.length)];
+            picks.push(chosen);
+            working = working.filter(s => s !== chosen);
+        }
+        return picks;
+    }
+
+    function assignRole(student, roleName, monthLabel) {
+        student.timesUsed = (student.timesUsed || 0) + 1;
+        student.lastRole = roleName;
+        if (!Array.isArray(student.rolesHistory)) student.rolesHistory = [];
+        student.rolesHistory.push({ role: roleName, month: monthLabel });
+    }
+
+    function runDraw() {
+        saveCurrentClass(false);
+        let students = db.classes[db.currentClass].filter(s => s.name !== '');
+
+        if (students.length < 9) return alert("Necesitas tener al menos 9 alumnos.");
+
+        const arribaM = students.filter(s => s.zone === 'arriba' && s.gender === 'M');
+        const arribaF = students.filter(s => s.zone === 'arriba' && s.gender === 'F');
+        const abajoM  = students.filter(s => s.zone === 'abajo' && s.gender === 'M');
+        const abajoF  = students.filter(s => s.zone === 'abajo' && s.gender === 'F');
+
+        if (!arribaM.length || !arribaF.length || !abajoM.length || !abajoF.length) {
+            return alert("Necesitas al menos 1 Niño y 1 Niña disponibles en Arriba y Abajo.");
+        }
+
+        const monthLabel = currentMonthLabel();
+
+        const aseoArrM = pickFairly(arribaM, "Aseo Arriba", 1)[0];
+        const aseoArrF = pickFairly(arribaF, "Aseo Arriba", 1)[0];
+        const aseoAbaM = pickFairly(abajoM, "Aseo Abajo", 1)[0];
+        const aseoAbaF = pickFairly(abajoF, "Aseo Abajo", 1)[0];
+
+        const chosenSoFar = [aseoArrM, aseoArrF, aseoAbaM, aseoAbaF];
+        let generalPool = students.filter(s => !chosenSoFar.includes(s));
+
+        if (generalPool.length < 5) {
+            return alert("No hay suficiente alumnado disponible para Tráfico y Materiales (necesitas al menos 5 más, sin contar aseo).");
+        }
+
+        const traficoPicks = pickFairly(generalPool, "Tráfico", 2);
+        generalPool = generalPool.filter(s => !traficoPicks.includes(s));
+        const materialesPicks = pickFairly(generalPool, "Materiales", 3);
+
+        assignRole(aseoArrM, "Aseo Arriba", monthLabel);
+        assignRole(aseoArrF, "Aseo Arriba", monthLabel);
+        assignRole(aseoAbaM, "Aseo Abajo", monthLabel);
+        assignRole(aseoAbaF, "Aseo Abajo", monthLabel);
+        traficoPicks.forEach(s => assignRole(s, "Tráfico", monthLabel));
+        materialesPicks.forEach(s => assignRole(s, "Materiales", monthLabel));
+
+        if (!db.classResults) db.classResults = {};
+        db.classResults[db.currentClass] = {
+            month: monthLabel,
+            trafico: traficoPicks.map(s => s.name),
+            materiales: materialesPicks.map(s => s.name),
+            aseoArribaM: aseoArrM.name,
+            aseoArribaF: aseoArrF.name,
+            aseoAbajoM: aseoAbaM.name,
+            aseoAbajoF: aseoAbaF.name
+        };
+
+        saveDB();
+        renderResults();
+        renderHistory();
+    }
+</script>
+</body>
+</html>
